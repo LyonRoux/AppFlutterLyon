@@ -1,122 +1,947 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(const PomodoroApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+// ─────────────────────────────────────────────
+// COMPANION STATE
+// ─────────────────────────────────────────────
+enum CompanionState {
+  idle,
+  workTransitionIn,
+  working,
+  workTransitionOut,
+  restTransitionIn,
+  resting,
+  restTransitionOut,
+}
 
-  // This widget is the root of your application.
+// Modo de sesión — independiente del companion
+enum SessionMode { work, rest }
+
+// ─────────────────────────────────────────────
+// SPRITE CONFIG — edita aquí para mapear tus PNGs
+// Pon tus imágenes en assets/sprites/ y actualiza las listas
+// ─────────────────────────────────────────────
+class SpriteConfig {
+  static const List<String> idleFrames = [
+    'assets/sprites/shime5.png',
+    'assets/sprites/shime6.png',
+    'assets/sprites/shime7.png',
+    'assets/sprites/shime8.png',
+    'assets/sprites/shime9.png',
+    'assets/sprites/shime10.png',
+    'assets/sprites/shime9.png',
+    'assets/sprites/shime8.png',
+    'assets/sprites/shime7.png',
+    'assets/sprites/shime6.png',
+  ];
+
+  // Transición al iniciar Work (one-shot → working)
+  static const List<String> workTransitionInFrames = [
+    'assets/sprites/shime19.png',
+    'assets/sprites/shime4.png',
+    'assets/sprites/shime1.png',
+  ];
+
+  static const List<String> workingFrames = [
+    'assets/sprites/shime2.png',
+    'assets/sprites/shime3.png',
+  ];
+
+  // Transición al salir de Work (one-shot → idle)
+  static const List<String> workTransitionOutFrames = [
+    'assets/sprites/shime1.png',
+    'assets/sprites/shime22.png',
+  ];
+
+  // Transición al iniciar Rest (one-shot → resting)
+  static const List<String> restTransitionInFrames = [
+    'assets/sprites/shime19.png',
+    'assets/sprites/shime4.png',
+    'assets/sprites/shime1.png',
+    'assets/sprites/shime11.png',
+  ];
+
+  static const List<String> restingFrames = [
+    'assets/sprites/shime15.png',
+    'assets/sprites/shime16.png',
+    'assets/sprites/shime17.png',
+    'assets/sprites/shime15.png',
+    'assets/sprites/shime26.png',
+    'assets/sprites/shime27.png',
+  ];
+
+  // Transición al salir de Rest (one-shot → idle)
+  static const List<String> restTransitionOutFrames = [
+    'assets/sprites/shime28.png',
+    'assets/sprites/shime29.png',
+    'assets/sprites/shime49.png',
+    'assets/sprites/shime28.png',
+    'assets/sprites/shime29.png',
+    'assets/sprites/shime11.png',
+    'assets/sprites/shime1.png',
+    'assets/sprites/shime22.png',
+  ];
+
+  // Velocidad de animación (ms entre frames)
+  static const int frameIntervalMs = 300;
+}
+
+// ─────────────────────────────────────────────
+// THEME
+// ─────────────────────────────────────────────
+class AppTheme {
+  static const Color bg = Color(0xFFF7F4EF);
+  static const Color surface = Color(0xFFFFFFFF);
+  static const Color ink = Color(0xFF1C1C1C);
+  static const Color inkLight = Color(0xFF8A8580);
+  static const Color accent = Color(0xFFD4573C);
+  static const Color accentSoft = Color(0xFFFAEDE9);
+  static const Color rest = Color(0xFF4A7C6F);
+  static const Color restSoft = Color(0xFFE6F2EF);
+  static const Color border = Color(0xFFE8E4DD);
+  static const Color timerRing = Color(0xFFEDE9E2);
+
+  static ThemeData get theme => ThemeData(
+        useMaterial3: true,
+        scaffoldBackgroundColor: bg,
+        colorScheme: ColorScheme.light(
+          primary: accent,
+          surface: surface,
+          onPrimary: Colors.white,
+          onSurface: ink,
+        ),
+        fontFamily: 'Georgia',
+        textTheme: const TextTheme(
+          displayLarge: TextStyle(
+            fontSize: 64,
+            fontWeight: FontWeight.w300,
+            letterSpacing: -2,
+            color: ink,
+            fontFamily: 'Georgia',
+          ),
+          titleLarge: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.5,
+            color: ink,
+          ),
+          bodyMedium: TextStyle(
+            fontSize: 14,
+            color: inkLight,
+            height: 1.6,
+          ),
+        ),
+      );
+}
+
+// ─────────────────────────────────────────────
+// ROOT APP
+// ─────────────────────────────────────────────
+class PomodoroApp extends StatelessWidget {
+  const PomodoroApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      title: 'Focus',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.theme,
+      home: const PomodoroScreen(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+// ─────────────────────────────────────────────
+// MAIN SCREEN
+// ─────────────────────────────────────────────
+class PomodoroScreen extends StatefulWidget {
+  const PomodoroScreen({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<PomodoroScreen> createState() => _PomodoroScreenState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _PomodoroScreenState extends State<PomodoroScreen>
+    with TickerProviderStateMixin {
+  // Timer state
+  int _totalSeconds = 25 * 60;
+  int _remainingSeconds = 25 * 60;
+  bool _isRunning = false;
+  bool _isPaused = false;
+  Timer? _timer;
 
-  void _incrementCounter() {
+  // Session mode (work vs rest) — separado del companion
+  SessionMode _sessionMode = SessionMode.work;
+
+  // Session state
+  CompanionState _companionState = CompanionState.idle;
+  final TextEditingController _taskController = TextEditingController();
+  final TextEditingController _minutesController =
+      TextEditingController(text: '25');
+  final TextEditingController _restController =
+      TextEditingController(text: '5');
+
+  // Sprite animation
+  int _currentFrame = 0;
+  Timer? _spriteTimer;
+
+  // Progress ring animation
+  late AnimationController _ringController;
+
+  @override
+  void initState() {
+    super.initState();
+    _ringController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _startSpriteAnimation();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _spriteTimer?.cancel();
+    _ringController.dispose();
+    _taskController.dispose();
+    _minutesController.dispose();
+    _restController.dispose();
+    super.dispose();
+  }
+
+  // ── Sprite animation ──────────────────────
+
+  // Estados one-shot — avanzan solos al terminar
+  bool get _isTransitionState =>
+      _companionState == CompanionState.workTransitionIn ||
+      _companionState == CompanionState.workTransitionOut ||
+      _companionState == CompanionState.restTransitionIn ||
+      _companionState == CompanionState.restTransitionOut;
+
+  // Qué estado sigue después de cada transición
+  CompanionState _nextStateAfterTransition() {
+    switch (_companionState) {
+      case CompanionState.workTransitionIn:
+        return CompanionState.working;
+      case CompanionState.workTransitionOut:
+        return CompanionState.idle;
+      case CompanionState.restTransitionIn:
+        return CompanionState.resting;
+      case CompanionState.restTransitionOut:
+        return CompanionState.idle;
+      default:
+        return CompanionState.idle;
+    }
+  }
+
+  void _startSpriteAnimation() {
+    _spriteTimer?.cancel();
+    _spriteTimer = Timer.periodic(
+      Duration(milliseconds: SpriteConfig.frameIntervalMs),
+      (_) {
+        final frames = _getFramesForState(_companionState);
+        if (frames.isEmpty) return;
+
+        final nextFrame = _currentFrame + 1;
+
+        if (_isTransitionState && nextFrame >= frames.length) {
+          _setCompanionState(_nextStateAfterTransition());
+        } else {
+          setState(() {
+            _currentFrame = nextFrame % frames.length;
+          });
+        }
+      },
+    );
+  }
+
+  List<String> _getFramesForState(CompanionState state) {
+    switch (state) {
+      case CompanionState.idle:
+        return SpriteConfig.idleFrames;
+      case CompanionState.workTransitionIn:
+        return SpriteConfig.workTransitionInFrames;
+      case CompanionState.working:
+        return SpriteConfig.workingFrames;
+      case CompanionState.workTransitionOut:
+        return SpriteConfig.workTransitionOutFrames;
+      case CompanionState.restTransitionIn:
+        return SpriteConfig.restTransitionInFrames;
+      case CompanionState.resting:
+        return SpriteConfig.restingFrames;
+      case CompanionState.restTransitionOut:
+        return SpriteConfig.restTransitionOutFrames;
+    }
+  }
+
+  void _setCompanionState(CompanionState state) {
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+      _companionState = state;
+      _currentFrame = 0;
     });
   }
 
+  // ── Timer logic ───────────────────────────
+  void _applyCustomTime() {
+    final mins = int.tryParse(_minutesController.text);
+    if (mins == null || mins <= 0) return;
+    setState(() {
+      _totalSeconds = mins * 60;
+      _remainingSeconds = mins * 60;
+      _isRunning = false;
+      _isPaused = false;
+    });
+    _timer?.cancel();
+    _setCompanionState(CompanionState.idle);
+  }
+
+  void _startTimer() {
+    if (_remainingSeconds == 0) return;
+    setState(() {
+      _isRunning = true;
+      _isPaused = false;
+    });
+    // Siempre inicia con la transición de entrada del modo actual
+    _setCompanionState(
+      _sessionMode == SessionMode.rest
+          ? CompanionState.restTransitionIn
+          : CompanionState.workTransitionIn,
+    );
+
+    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (_remainingSeconds <= 0) {
+        t.cancel();
+        _onTimerComplete();
+        return;
+      }
+      setState(() => _remainingSeconds--);
+    });
+  }
+
+  void _pauseTimer() {
+    _timer?.cancel();
+    setState(() {
+      _isRunning = false;
+      _isPaused = true;
+    });
+    // Transición de salida del modo actual → idle
+    _setCompanionState(
+      _sessionMode == SessionMode.rest
+          ? CompanionState.restTransitionOut
+          : CompanionState.workTransitionOut,
+    );
+  }
+
+  void _resetTimer() {
+    _timer?.cancel();
+    setState(() {
+      _remainingSeconds = _totalSeconds;
+      _isRunning = false;
+      _isPaused = false;
+      _sessionMode = SessionMode.work;
+    });
+    _setCompanionState(CompanionState.idle);
+  }
+
+  void _onTimerComplete() {
+    if (_sessionMode == SessionMode.work) {
+      // Work terminó → transición de salida → idle, precarga rest
+      final restMins = int.tryParse(_restController.text) ?? 5;
+      setState(() {
+        _isRunning = false;
+        _isPaused = false;
+        _sessionMode = SessionMode.rest;
+        _totalSeconds = restMins * 60;
+        _remainingSeconds = restMins * 60;
+      });
+      _setCompanionState(CompanionState.workTransitionOut);
+    } else {
+      // Rest terminó → transición de salida → idle, precarga work
+      final mins = int.tryParse(_minutesController.text) ?? 25;
+      setState(() {
+        _isRunning = false;
+        _isPaused = false;
+        _sessionMode = SessionMode.work;
+        _totalSeconds = mins * 60;
+        _remainingSeconds = mins * 60;
+      });
+      _setCompanionState(CompanionState.restTransitionOut);
+    }
+  }
+
+  // ── Helpers ───────────────────────────────
+  double get _progress =>
+      _totalSeconds > 0 ? _remainingSeconds / _totalSeconds : 0;
+
+  String get _timeString {
+    final m = (_remainingSeconds ~/ 60).toString().padLeft(2, '0');
+    final s = (_remainingSeconds % 60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
+  Color get _accentColor =>
+      _sessionMode == SessionMode.rest ? AppTheme.rest : AppTheme.accent;
+
+  Color get _accentSoftColor =>
+      _sessionMode == SessionMode.rest ? AppTheme.restSoft : AppTheme.accentSoft;
+
+  // ─────────────────────────────────────────
+  // BUILD
+  // ─────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+      backgroundColor: AppTheme.bg,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              _buildHeader(),
+              const SizedBox(height: 32),
+              _buildCompanion(),
+              const SizedBox(height: 32),
+              _buildTimerCard(),
+              const SizedBox(height: 16),
+              _buildTaskField(),
+              const SizedBox(height: 16),
+              _buildDebugButton(),
+              const SizedBox(height: 32),
+            ],
+          ),
+        ),
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
+    );
+  }
+
+  // ── Header ────────────────────────────────
+  Widget _buildHeader() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('You have pushed the button this many times:'),
             Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+              'focus.',
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -1,
+                color: AppTheme.ink,
+                fontFamily: 'Georgia',
+              ),
+            ),
+            Text(
+              _statusLabel,
+              style: TextStyle(
+                fontSize: 12,
+                color: _accentColor,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 1.5,
+              ),
             ),
           ],
         ),
+        _buildStatusBadge(),
+      ],
+    );
+  }
+
+  String get _statusLabel {
+    if (_companionState == CompanionState.resting) return 'BREAK TIME';
+    if (_isRunning) return 'IN SESSION';
+    if (_isPaused) return 'PAUSED';
+    return 'READY';
+  }
+
+  Widget _buildStatusBadge() {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 400),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: _accentSoftColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _accentColor.withOpacity(0.2)),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 400),
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(
+              color: _isRunning ? _accentColor : AppTheme.inkLight,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            _isRunning ? 'live' : 'idle',
+            style: TextStyle(
+              fontSize: 12,
+              color: _isRunning ? _accentColor : AppTheme.inkLight,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
+  }
+
+  // ── Companion ─────────────────────────────
+  Widget _buildCompanion() {
+    final frames = _getFramesForState(_companionState);
+    final hasSprites = frames.isNotEmpty;
+
+    return Center(
+      child: SizedBox(
+        width: 128,
+        height: 128,
+        child: hasSprites
+            ? Image.asset(
+                frames[_currentFrame % frames.length],
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => _placeholderCompanion(),
+              )
+            : _placeholderCompanion(),
+      ),
+    );
+  }
+
+  Widget _placeholderCompanion() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          _companionEmoji,
+          style: const TextStyle(fontSize: 52),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          _companionStateLabel,
+          style: TextStyle(
+            fontSize: 10,
+            color: AppTheme.inkLight,
+            letterSpacing: 1,
+          ),
+        ),
+      ],
+    );
+  }
+
+  String get _companionEmoji {
+    switch (_companionState) {
+      case CompanionState.idle:
+        return '🐾';
+      case CompanionState.workTransitionIn:
+        return '⚡';
+      case CompanionState.working:
+        return '✏️';
+      case CompanionState.workTransitionOut:
+        return '😮‍💨';
+      case CompanionState.restTransitionIn:
+        return '🌙';
+      case CompanionState.resting:
+        return '💤';
+      case CompanionState.restTransitionOut:
+        return '🌅';
+    }
+  }
+
+  String get _companionStateLabel {
+    switch (_companionState) {
+      case CompanionState.idle:
+        return 'idle';
+      case CompanionState.workTransitionIn:
+        return 'starting...';
+      case CompanionState.working:
+        return 'working';
+      case CompanionState.workTransitionOut:
+        return 'wrapping up...';
+      case CompanionState.restTransitionIn:
+        return 'winding down...';
+      case CompanionState.resting:
+        return 'resting';
+      case CompanionState.restTransitionOut:
+        return 'waking up...';
+    }
+  }
+
+  // ── Timer Card ────────────────────────────
+  Widget _buildTimerCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(28),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppTheme.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Progress ring + time
+          _buildProgressRing(),
+          const SizedBox(height: 28),
+          // Divider
+          Container(height: 1, color: AppTheme.border),
+          const SizedBox(height: 20),
+          // Custom time input
+          _buildTimeInput(),
+          const SizedBox(height: 20),
+          // Controls
+          _buildControls(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProgressRing() {
+    return SizedBox(
+      width: 200,
+      height: 200,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Background ring
+          SizedBox(
+            width: 200,
+            height: 200,
+            child: CircularProgressIndicator(
+              value: 1.0,
+              strokeWidth: 8,
+              color: AppTheme.timerRing,
+            ),
+          ),
+          // Progress ring
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: 200,
+            height: 200,
+            child: CircularProgressIndicator(
+              value: _progress,
+              strokeWidth: 8,
+              color: _accentColor,
+              strokeCap: StrokeCap.round,
+            ),
+          ),
+          // Time display
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                _timeString,
+                style: TextStyle(
+                  fontSize: 52,
+                  fontWeight: FontWeight.w300,
+                  letterSpacing: -2,
+                  color: AppTheme.ink,
+                  fontFamily: 'Georgia',
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTimeInput() {
+    // Solo muestra el chip del modo activo
+    if (_sessionMode == SessionMode.rest) {
+      return _TimeInputChip(
+        label: 'Rest',
+        controller: _restController,
+        enabled: !_isRunning,
+        color: AppTheme.rest,
+        softColor: AppTheme.restSoft,
+        icon: Icons.coffee_rounded,
+        onSubmitted: _applyCustomTime,
+      );
+    }
+    return _TimeInputChip(
+      label: 'Work',
+      controller: _minutesController,
+      enabled: !_isRunning,
+      color: AppTheme.accent,
+      softColor: AppTheme.accentSoft,
+      icon: Icons.edit_rounded,
+      onSubmitted: _applyCustomTime,
+    );
+  }
+
+  Widget _buildControls() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        // Work — izquierda
+        _ControlButton(
+          icon: Icons.edit_rounded,
+          onTap: () {
+            if (!_isRunning) {
+              _timer?.cancel();
+              final mins = int.tryParse(_minutesController.text) ?? 25;
+              setState(() {
+                _sessionMode = SessionMode.work;
+                _totalSeconds = mins * 60;
+                _remainingSeconds = mins * 60;
+                _isPaused = false;
+              });
+              _setCompanionState(CompanionState.idle);
+            }
+          },
+          color: _sessionMode == SessionMode.work
+              ? AppTheme.accent
+              : AppTheme.inkLight,
+          bgColor: _sessionMode == SessionMode.work
+              ? AppTheme.accentSoft
+              : AppTheme.bg,
+          size: 48,
+          tooltip: 'Work mode',
+        ),
+        const SizedBox(width: 16),
+        // Play / Pause (primary)
+        _ControlButton(
+          icon: _isRunning
+              ? Icons.pause_rounded
+              : Icons.play_arrow_rounded,
+          onTap: _isRunning ? _pauseTimer : _startTimer,
+          color: Colors.white,
+          bgColor: _accentColor,
+          size: 64,
+          iconSize: 32,
+        ),
+        const SizedBox(width: 16),
+        // Break — derecha
+        _ControlButton(
+          icon: Icons.coffee_rounded,
+          onTap: () {
+            if (!_isRunning) {
+              _timer?.cancel();
+              setState(() {
+                _sessionMode = SessionMode.rest;
+                _totalSeconds = (int.tryParse(_restController.text) ?? 5) * 60;
+                _remainingSeconds = (int.tryParse(_restController.text) ?? 5) * 60;
+                _isPaused = false;
+                // companion se mantiene en idle — solo cambia al play
+              });
+            }
+          },
+          color: _sessionMode == SessionMode.rest
+              ? AppTheme.rest
+              : AppTheme.inkLight,
+          bgColor: _sessionMode == SessionMode.rest
+              ? AppTheme.restSoft
+              : AppTheme.bg,
+          size: 48,
+          tooltip: 'Break mode',
+        ),
+      ],
+    );
+  }
+
+  // ── Debug ─────────────────────────────────
+  Widget _buildDebugButton() {
+    return GestureDetector(
+      onTap: () {
+        _timer?.cancel();
+        setState(() {
+          _totalSeconds = 3;
+          _remainingSeconds = 3;
+          _isRunning = false;
+          _isPaused = false;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.amber.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.amber.withOpacity(0.4)),
+        ),
+        child: const Text(
+          '⚠️ debug: 3s',
+          style: TextStyle(fontSize: 11, color: Colors.orange),
+        ),
+      ),
+    );
+  }
+
+  // ── Task field ────────────────────────────
+  Widget _buildTaskField() {
+    return TextField(
+      controller: _taskController,
+      textAlign: TextAlign.center,
+      style: TextStyle(
+        fontSize: 14,
+        color: AppTheme.inkLight,
+        fontStyle: FontStyle.italic,
+      ),
+      decoration: InputDecoration(
+        hintText: 'working on...',
+        hintStyle: TextStyle(
+          color: AppTheme.inkLight.withOpacity(0.4),
+          fontSize: 14,
+          fontStyle: FontStyle.italic,
+        ),
+        border: InputBorder.none,
+        enabledBorder: InputBorder.none,
+        focusedBorder: InputBorder.none,
+        contentPadding: EdgeInsets.zero,
+        isDense: true,
+      ),
+      onChanged: (_) => setState(() {}),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+// TIME INPUT CHIP (work / rest)
+// ─────────────────────────────────────────────
+class _TimeInputChip extends StatelessWidget {
+  final String label;
+  final TextEditingController controller;
+  final bool enabled;
+  final Color color;
+  final Color softColor;
+  final IconData icon;
+  final VoidCallback onSubmitted;
+
+  const _TimeInputChip({
+    required this.label,
+    required this.controller,
+    required this.enabled,
+    required this.color,
+    required this.softColor,
+    required this.icon,
+    required this.onSubmitted,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: softColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: color),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              color: color,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 40,
+            child: TextField(
+              controller: controller,
+              enabled: enabled,
+              textAlign: TextAlign.center,
+              keyboardType: TextInputType.number,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(3),
+              ],
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                contentPadding: EdgeInsets.zero,
+                isDense: true,
+              ),
+              onSubmitted: (_) => onSubmitted(),
+            ),
+          ),
+          Text(
+            'm',
+            style: TextStyle(
+              fontSize: 11,
+              color: color.withOpacity(0.6),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+// REUSABLE CONTROL BUTTON
+// ─────────────────────────────────────────────
+class _ControlButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final Color color;
+  final Color bgColor;
+  final double size;
+  final double iconSize;
+  final String? tooltip;
+
+  const _ControlButton({
+    required this.icon,
+    required this.onTap,
+    required this.color,
+    required this.bgColor,
+    this.size = 48,
+    this.iconSize = 22,
+    this.tooltip,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final btn = GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: bgColor,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 12,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Icon(icon, color: color, size: iconSize),
+      ),
+    );
+
+    if (tooltip != null) {
+      return Tooltip(message: tooltip!, child: btn);
+    }
+    return btn;
   }
 }
