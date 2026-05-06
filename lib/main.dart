@@ -178,6 +178,9 @@ class _PomodoroScreenState extends State<PomodoroScreen>
   // Session mode (work vs rest) — separado del companion
   SessionMode _sessionMode = SessionMode.work;
 
+  // Pomodoro counter (0-4: cuántos work completados en el ciclo actual)
+  int _completedPomodoros = 0;
+
   // Session state
   CompanionState _companionState = CompanionState.idle;
   final TextEditingController _taskController = TextEditingController();
@@ -350,7 +353,7 @@ class _PomodoroScreenState extends State<PomodoroScreen>
 
   void _onTimerComplete() {
     if (_sessionMode == SessionMode.work) {
-      // Work terminó → transición de salida → idle, precarga rest
+      // Work terminó → incrementa pomodoro, precarga rest
       final restMins = int.tryParse(_restController.text) ?? 5;
       setState(() {
         _isRunning = false;
@@ -358,10 +361,11 @@ class _PomodoroScreenState extends State<PomodoroScreen>
         _sessionMode = SessionMode.rest;
         _totalSeconds = restMins * 60;
         _remainingSeconds = restMins * 60;
+        if (_completedPomodoros < 4) _completedPomodoros++;
       });
       _setCompanionState(CompanionState.workTransitionOut);
     } else {
-      // Rest terminó → transición de salida → idle, precarga work
+      // Rest terminó → si era el 4to descanso, resetea contador
       final mins = int.tryParse(_minutesController.text) ?? 25;
       setState(() {
         _isRunning = false;
@@ -369,6 +373,7 @@ class _PomodoroScreenState extends State<PomodoroScreen>
         _sessionMode = SessionMode.work;
         _totalSeconds = mins * 60;
         _remainingSeconds = mins * 60;
+        if (_completedPomodoros >= 4) _completedPomodoros = 0;
       });
       _setCompanionState(CompanionState.restTransitionOut);
     }
@@ -408,10 +413,6 @@ class _PomodoroScreenState extends State<PomodoroScreen>
               _buildCompanion(),
               const SizedBox(height: 32),
               _buildTimerCard(),
-              const SizedBox(height: 16),
-              _buildTaskField(),
-              const SizedBox(height: 16),
-              _buildDebugButton(),
               const SizedBox(height: 32),
             ],
           ),
@@ -576,6 +577,82 @@ class _PomodoroScreenState extends State<PomodoroScreen>
   }
 
   // ── Timer Card ────────────────────────────
+  void _showTimerConfigDialog() {
+    final workTemp = TextEditingController(text: _minutesController.text);
+    final restTemp = TextEditingController(text: _restController.text);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Set durations',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.ink,
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _DialogTimeRow(
+              label: 'Work',
+              icon: Icons.edit_rounded,
+              color: AppTheme.accent,
+              softColor: AppTheme.accentSoft,
+              controller: workTemp,
+            ),
+            const SizedBox(height: 16),
+            _DialogTimeRow(
+              label: 'Rest',
+              icon: Icons.coffee_rounded,
+              color: AppTheme.rest,
+              softColor: AppTheme.restSoft,
+              controller: restTemp,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel',
+                style: TextStyle(color: AppTheme.inkLight)),
+          ),
+          TextButton(
+            onPressed: () {
+              final mins = int.tryParse(workTemp.text);
+              final rest = int.tryParse(restTemp.text);
+              if (mins != null && mins > 0) {
+                _minutesController.text = workTemp.text;
+                if (_sessionMode == SessionMode.work) {
+                  setState(() {
+                    _totalSeconds = mins * 60;
+                    _remainingSeconds = mins * 60;
+                  });
+                }
+              }
+              if (rest != null && rest > 0) {
+                _restController.text = restTemp.text;
+                if (_sessionMode == SessionMode.rest) {
+                  setState(() {
+                    _totalSeconds = rest * 60;
+                    _remainingSeconds = rest * 60;
+                  });
+                }
+              }
+              Navigator.pop(ctx);
+            },
+            child: Text('Save',
+                style: TextStyle(
+                    color: _accentColor, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTimerCard() {
     return Container(
       width: double.infinity,
@@ -594,14 +671,17 @@ class _PomodoroScreenState extends State<PomodoroScreen>
       ),
       child: Column(
         children: [
-          // Progress ring + time
-          _buildProgressRing(),
-          const SizedBox(height: 28),
+          // Progress ring + time (tappable para configurar duración)
+          GestureDetector(
+            onTap: _isRunning ? null : _showTimerConfigDialog,
+            child: _buildProgressRing(),
+          ),
+          const SizedBox(height: 20),
+          // Pomodoro tracker
+          _buildPomodoroTracker(),
+          const SizedBox(height: 20),
           // Divider
           Container(height: 1, color: AppTheme.border),
-          const SizedBox(height: 20),
-          // Custom time input
-          _buildTimeInput(),
           const SizedBox(height: 20),
           // Controls
           _buildControls(),
@@ -653,6 +733,46 @@ class _PomodoroScreenState extends State<PomodoroScreen>
                   fontFamily: 'Georgia',
                 ),
               ),
+              SizedBox(
+                width: 140,
+                child: TextField(
+                  controller: _taskController,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  minLines: 1,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppTheme.inkLight,
+                    fontStyle: FontStyle.italic,
+                    height: 1.4,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'working on...',
+                    hintStyle: TextStyle(
+                      color: AppTheme.inkLight.withOpacity(0.35),
+                      fontSize: 11,
+                      fontStyle: FontStyle.italic,
+                    ),
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    contentPadding: EdgeInsets.zero,
+                    isDense: true,
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
+              if (!_isRunning) ...[
+                const SizedBox(height: 6),
+                Text(
+                  'tap to set time',
+                  style: TextStyle(
+                    fontSize: 9,
+                    color: AppTheme.inkLight.withOpacity(0.3),
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
             ],
           ),
         ],
@@ -754,6 +874,48 @@ class _PomodoroScreenState extends State<PomodoroScreen>
     );
   }
 
+  // ── Pomodoro tracker ──────────────────────
+  Widget _buildPomodoroTracker() {
+    // Paths — reemplaza con tus PNGs cuando los tengas
+    // 'assets/pomodoro_empty.png' y 'assets/pomodoro_filled.png'
+    const emptyAsset = 'assets/emptycat.png';
+    const filledAsset = 'assets/filledcat.png';
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        ...List.generate(4, (i) {
+          final filled = i < _completedPomodoros;
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: emptyAsset.isEmpty
+                ? _PomodoroSlot(filled: filled)
+                : Image.asset(
+                    filled ? filledAsset : emptyAsset,
+                    width: 32,
+                    height: 32,
+                  ),
+          );
+        }),
+        const SizedBox(width: 12),
+        // Reset manual
+        GestureDetector(
+          onTap: () => setState(() => _completedPomodoros = 0),
+          child: Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: AppTheme.bg,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppTheme.border),
+            ),
+            child: Icon(Icons.refresh_rounded,
+                size: 14, color: AppTheme.inkLight),
+          ),
+        ),
+      ],
+    );
+  }
+
   // ── Debug ─────────────────────────────────
   Widget _buildDebugButton() {
     return GestureDetector(
@@ -810,8 +972,124 @@ class _PomodoroScreenState extends State<PomodoroScreen>
 }
 
 // ─────────────────────────────────────────────
-// TIME INPUT CHIP (work / rest)
+// POMODORO SLOT PLACEHOLDER
+// Reemplaza con Image.asset cuando tengas los PNGs
 // ─────────────────────────────────────────────
+class _PomodoroSlot extends StatelessWidget {
+  final bool filled;
+  const _PomodoroSlot({required this.filled});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 400),
+      width: 28,
+      height: 28,
+      decoration: BoxDecoration(
+        color: filled ? AppTheme.accent : Colors.transparent,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: filled
+              ? AppTheme.accent
+              : AppTheme.inkLight.withOpacity(0.25),
+          width: 1.5,
+        ),
+      ),
+      child: Center(
+        child: Text(
+          '🍅',
+          style: TextStyle(
+            fontSize: filled ? 16 : 14,
+            color: filled ? Colors.white : AppTheme.inkLight.withOpacity(0.3),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+// DIALOG TIME ROW
+// ─────────────────────────────────────────────
+class _DialogTimeRow extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final Color softColor;
+  final TextEditingController controller;
+
+  const _DialogTimeRow({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.softColor,
+    required this.controller,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: softColor,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, size: 16, color: color),
+        ),
+        const SizedBox(width: 12),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 14,
+            color: AppTheme.ink,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const Spacer(),
+        SizedBox(
+          width: 56,
+          child: TextField(
+            controller: controller,
+            textAlign: TextAlign.center,
+            keyboardType: TextInputType.number,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(3),
+            ],
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
+            decoration: InputDecoration(
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: AppTheme.border),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: AppTheme.border),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: color, width: 1.5),
+              ),
+              filled: true,
+              fillColor: softColor,
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text('min',
+            style: TextStyle(fontSize: 12, color: AppTheme.inkLight)),
+      ],
+    );
+  }
+}
 class _TimeInputChip extends StatelessWidget {
   final String label;
   final TextEditingController controller;

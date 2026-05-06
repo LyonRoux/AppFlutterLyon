@@ -35,3 +35,6 @@ flutter:
     # ...
     # O declara la carpeta entera así:
     - assets/sprites/
+    - assets/emptycat.png
+    - assets/filledcat.png
+    
