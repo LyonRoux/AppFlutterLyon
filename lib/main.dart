@@ -166,8 +166,7 @@ class PomodoroScreen extends StatefulWidget {
   State<PomodoroScreen> createState() => _PomodoroScreenState();
 }
 
-class _PomodoroScreenState extends State<PomodoroScreen>
-    with TickerProviderStateMixin {
+class _PomodoroScreenState extends State<PomodoroScreen> {
   // Timer state
   int _totalSeconds = 25 * 60;
   int _remainingSeconds = 25 * 60;
@@ -193,24 +192,15 @@ class _PomodoroScreenState extends State<PomodoroScreen>
   int _currentFrame = 0;
   Timer? _spriteTimer;
 
-  // Progress ring animation
-  late AnimationController _ringController;
-
   @override
   void initState() {
-    super.initState();
-    _ringController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    );
-    _startSpriteAnimation();
+    super.initState();    _startSpriteAnimation();
   }
 
   @override
   void dispose() {
     _timer?.cancel();
     _spriteTimer?.cancel();
-    _ringController.dispose();
     _taskController.dispose();
     _minutesController.dispose();
     _restController.dispose();
@@ -290,19 +280,6 @@ class _PomodoroScreenState extends State<PomodoroScreen>
   }
 
   // ── Timer logic ───────────────────────────
-  void _applyCustomTime() {
-    final mins = int.tryParse(_minutesController.text);
-    if (mins == null || mins <= 0) return;
-    setState(() {
-      _totalSeconds = mins * 60;
-      _remainingSeconds = mins * 60;
-      _isRunning = false;
-      _isPaused = false;
-    });
-    _timer?.cancel();
-    _setCompanionState(CompanionState.idle);
-  }
-
   void _startTimer() {
     if (_remainingSeconds == 0) return;
     setState(() {
@@ -338,17 +315,6 @@ class _PomodoroScreenState extends State<PomodoroScreen>
           ? CompanionState.restTransitionOut
           : CompanionState.workTransitionOut,
     );
-  }
-
-  void _resetTimer() {
-    _timer?.cancel();
-    setState(() {
-      _remainingSeconds = _totalSeconds;
-      _isRunning = false;
-      _isPaused = false;
-      _sessionMode = SessionMode.work;
-    });
-    _setCompanionState(CompanionState.idle);
   }
 
   void _onTimerComplete() {
@@ -500,80 +466,20 @@ class _PomodoroScreenState extends State<PomodoroScreen>
   // ── Companion ─────────────────────────────
   Widget _buildCompanion() {
     final frames = _getFramesForState(_companionState);
-    final hasSprites = frames.isNotEmpty;
 
     return Center(
       child: SizedBox(
         width: 128,
         height: 128,
-        child: hasSprites
-            ? Image.asset(
+        child: frames.isEmpty
+            ? const SizedBox.shrink()
+            : Image.asset(
                 frames[_currentFrame % frames.length],
                 fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) => _placeholderCompanion(),
-              )
-            : _placeholderCompanion(),
+                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+              ),
       ),
     );
-  }
-
-  Widget _placeholderCompanion() {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          _companionEmoji,
-          style: const TextStyle(fontSize: 52),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          _companionStateLabel,
-          style: TextStyle(
-            fontSize: 10,
-            color: AppTheme.inkLight,
-            letterSpacing: 1,
-          ),
-        ),
-      ],
-    );
-  }
-
-  String get _companionEmoji {
-    switch (_companionState) {
-      case CompanionState.idle:
-        return '🐾';
-      case CompanionState.workTransitionIn:
-        return '⚡';
-      case CompanionState.working:
-        return '✏️';
-      case CompanionState.workTransitionOut:
-        return '😮‍💨';
-      case CompanionState.restTransitionIn:
-        return '🌙';
-      case CompanionState.resting:
-        return '💤';
-      case CompanionState.restTransitionOut:
-        return '🌅';
-    }
-  }
-
-  String get _companionStateLabel {
-    switch (_companionState) {
-      case CompanionState.idle:
-        return 'idle';
-      case CompanionState.workTransitionIn:
-        return 'starting...';
-      case CompanionState.working:
-        return 'working';
-      case CompanionState.workTransitionOut:
-        return 'wrapping up...';
-      case CompanionState.restTransitionIn:
-        return 'winding down...';
-      case CompanionState.resting:
-        return 'resting';
-      case CompanionState.restTransitionOut:
-        return 'waking up...';
-    }
   }
 
   // ── Timer Card ────────────────────────────
@@ -780,30 +686,6 @@ class _PomodoroScreenState extends State<PomodoroScreen>
     );
   }
 
-  Widget _buildTimeInput() {
-    // Solo muestra el chip del modo activo
-    if (_sessionMode == SessionMode.rest) {
-      return _TimeInputChip(
-        label: 'Rest',
-        controller: _restController,
-        enabled: !_isRunning,
-        color: AppTheme.rest,
-        softColor: AppTheme.restSoft,
-        icon: Icons.coffee_rounded,
-        onSubmitted: _applyCustomTime,
-      );
-    }
-    return _TimeInputChip(
-      label: 'Work',
-      controller: _minutesController,
-      enabled: !_isRunning,
-      color: AppTheme.accent,
-      softColor: AppTheme.accentSoft,
-      icon: Icons.edit_rounded,
-      onSubmitted: _applyCustomTime,
-    );
-  }
-
   Widget _buildControls() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -888,13 +770,11 @@ class _PomodoroScreenState extends State<PomodoroScreen>
           final filled = i < _completedPomodoros;
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 6),
-            child: emptyAsset.isEmpty
-                ? _PomodoroSlot(filled: filled)
-                : Image.asset(
-                    filled ? filledAsset : emptyAsset,
-                    width: 32,
-                    height: 32,
-                  ),
+            child: Image.asset(
+              filled ? filledAsset : emptyAsset,
+              width: 32,
+              height: 32,
+            ),
           );
         }),
         const SizedBox(width: 12),
@@ -916,96 +796,6 @@ class _PomodoroScreenState extends State<PomodoroScreen>
     );
   }
 
-  // ── Debug ─────────────────────────────────
-  Widget _buildDebugButton() {
-    return GestureDetector(
-      onTap: () {
-        _timer?.cancel();
-        setState(() {
-          _totalSeconds = 3;
-          _remainingSeconds = 3;
-          _isRunning = false;
-          _isPaused = false;
-        });
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.amber.withOpacity(0.15),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.amber.withOpacity(0.4)),
-        ),
-        child: const Text(
-          '⚠️ debug: 3s',
-          style: TextStyle(fontSize: 11, color: Colors.orange),
-        ),
-      ),
-    );
-  }
-
-  // ── Task field ────────────────────────────
-  Widget _buildTaskField() {
-    return TextField(
-      controller: _taskController,
-      textAlign: TextAlign.center,
-      style: TextStyle(
-        fontSize: 14,
-        color: AppTheme.inkLight,
-        fontStyle: FontStyle.italic,
-      ),
-      decoration: InputDecoration(
-        hintText: 'working on...',
-        hintStyle: TextStyle(
-          color: AppTheme.inkLight.withOpacity(0.4),
-          fontSize: 14,
-          fontStyle: FontStyle.italic,
-        ),
-        border: InputBorder.none,
-        enabledBorder: InputBorder.none,
-        focusedBorder: InputBorder.none,
-        contentPadding: EdgeInsets.zero,
-        isDense: true,
-      ),
-      onChanged: (_) => setState(() {}),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────
-// POMODORO SLOT PLACEHOLDER
-// Reemplaza con Image.asset cuando tengas los PNGs
-// ─────────────────────────────────────────────
-class _PomodoroSlot extends StatelessWidget {
-  final bool filled;
-  const _PomodoroSlot({required this.filled});
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 400),
-      width: 28,
-      height: 28,
-      decoration: BoxDecoration(
-        color: filled ? AppTheme.accent : Colors.transparent,
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(
-          color: filled
-              ? AppTheme.accent
-              : AppTheme.inkLight.withOpacity(0.25),
-          width: 1.5,
-        ),
-      ),
-      child: Center(
-        child: Text(
-          '🍅',
-          style: TextStyle(
-            fontSize: filled ? 16 : 14,
-            color: filled ? Colors.white : AppTheme.inkLight.withOpacity(0.3),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 // ─────────────────────────────────────────────
@@ -1090,88 +880,6 @@ class _DialogTimeRow extends StatelessWidget {
     );
   }
 }
-class _TimeInputChip extends StatelessWidget {
-  final String label;
-  final TextEditingController controller;
-  final bool enabled;
-  final Color color;
-  final Color softColor;
-  final IconData icon;
-  final VoidCallback onSubmitted;
-
-  const _TimeInputChip({
-    required this.label,
-    required this.controller,
-    required this.enabled,
-    required this.color,
-    required this.softColor,
-    required this.icon,
-    required this.onSubmitted,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: softColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.2)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 13, color: color),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              color: color,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.5,
-            ),
-          ),
-          const SizedBox(width: 8),
-          SizedBox(
-            width: 40,
-            child: TextField(
-              controller: controller,
-              enabled: enabled,
-              textAlign: TextAlign.center,
-              keyboardType: TextInputType.number,
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-                LengthLimitingTextInputFormatter(3),
-              ],
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: color,
-              ),
-              decoration: const InputDecoration(
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                contentPadding: EdgeInsets.zero,
-                isDense: true,
-              ),
-              onSubmitted: (_) => onSubmitted(),
-            ),
-          ),
-          Text(
-            'm',
-            style: TextStyle(
-              fontSize: 11,
-              color: color.withOpacity(0.6),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 // ─────────────────────────────────────────────
 // REUSABLE CONTROL BUTTON
 // ─────────────────────────────────────────────
